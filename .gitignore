@@ -1,0 +1,11 @@
+# Images and pdf
+*.png
+*.jpeg
+*.jpg
+*.pdf
+
+# Torch models and checkpoints
+*.pt
+
+# Unnecessary folders
+__pycache__/*

@@ -1,0 +1,126 @@
+---
+title: "Experiments for 'Feature Attribution for Survival Neural Networks'
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  out.width = "100%"
+)
+```
+
+```{r setup}
+library(Survinng)
+library(ggplot2)
+set.seed(42)
+```
+
+# Time-independent effects
+
+## Generate the data
+
+Simulation setting:
+- $10,000$ samples ($9,500$ for training, $500$ for testing)
+- No time-dependent effects
+- $X_1 \sim \mathcal{N}(0,1)$ has a positive effect on the hazard -> negative effect on survival
+- $X_2 \sim \mathcal{U}(0,1)$ has a stronger negative effect on the hazard -> positive effect on survival
+- $X_3 \sim \mathcal{U}(-1,1)$ has no effect
+
+```{r sim1 data generation}
+library(survival)
+library(simsurv)
+
+# Simulate data
+n <- 10000
+x <- data.frame(x1 = rnorm(n), x2 = runif(n, 0, 1), x3 = runif(n, -1, 1))
+simdat <- simsurv(dist = "weibull", lambdas = 0.1, gammas = 2.5, betas = c(x1 = 1.7, x2 = -2.4),
+                  x = x, maxt = 7)
+y <- simdat[, -1]
+colnames(y)[1] <- "time"
+dat <- cbind(y, x)
+
+# Train/test
+idx <- sample(n, 9500)
+train <- dat[idx, ]
+test <- dat[-idx, ]
+```
+
+## Fit the models
+```{r utils1, echo = FALSE}
+fit_model <- function(model, train, test) {
+  callr::r(function(model, train, test) {
+    library(survivalmodels)
+    library(survival)
+    reticulate::use_condaenv("Survinng", required = TRUE)
+    set.seed(1)
+    set_seed(1)
+    
+    # Fit model
+    if (model == "CoxTime") {
+      model <- coxtime(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 500L,
+                     early_stopping = TRUE, frac = 0.33, batch_size = 1024L, patience = 10L,
+                     dropout = 0.1)
+    } else if (model == "DeepHit") {
+      model <- deephit(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 500L,
+                     early_stopping = TRUE, frac = 0.33, patience = 10L, cuts = 30, 
+                     batch_size = 1024L, dropout = 0.1)
+    } else if (model == "DeepSurv") {
+      model <- deepsurv(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 100L,
+                      early_stopping = TRUE, frac = 0.33, patience = 10L, batch_size = 1024L,
+                      dropout = 0.1)
+    } else {
+      stop("Model not found")
+    }
+    
+    # Make predictions
+    pred <- predict(model, newdata = test, type = "survival")
+    dat <- data.frame(
+      pred = c(pred), 
+      time = rep(as.numeric(colnames(pred)), each = nrow(pred)),
+      id = rep(1:nrow(pred), ncol(pred))
+    )
+    list(Survinng::extract_model(model), pred = dat)
+  }, list(model, train, test))
+}
+```
+
+```{r sim1 fit models, fig.width=10, fig.height=15}
+# Fit the models
+ext_deephit <- fit_model("DeepHit", train, test)
+ext_coxtime <- fit_model("CoxTime", train, test)
+ext_deepsurv <- fit_model("DeepSurv", train, test)
+```
+
+
+## Create Explainer
+
+```{r sim1 explainer}
+library(Survinng)
+library(torch)
+
+# Create explainer
+exp_deephit <- explain(ext_deephit[[1]], data = test)
+exp_coxtime <- explain(ext_coxtime[[1]], data = test)
+exp_deepsurv <- explain(ext_deepsurv[[1]], data = test)
+```
+
+
+## Survival Attribution
+
+### Gradient (Sensitivity)
+
+```{r sim1 gradient, fig.width=10, fig.height=15}
+grad_cox <- surv_grad(exp_coxtime, target = "survival", instance = c(2,3))
+grad_deephit <- surv_grad(exp_deephit, target = "survival", instance = c(2,3))
+grad_deepsurv <- surv_grad(exp_deepsurv, target = "survival", instance = c(2,3))
+
+cowplot::plot_grid(
+  plot(grad_cox), 
+  plot(grad_deephit), 
+  plot(grad_deepsurv),
+  nrow = 3, labels = c("CoxTime", "DeepHit", "DeepSurv"))
+```
+
+
+

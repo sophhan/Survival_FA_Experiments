@@ -1,3 +1,89 @@
+################################################################################
+#                            Utility functions
+################################################################################
+
+
+# Create survex::explainer -----------------------------------------------------
+to_survex <- function(explainer, verbose = FALSE) {
+  # Make sure 'survex' package is installed
+  if (!requireNamespace("survex", quietly = TRUE)) {
+    stop("Please install the 'survex' package")
+  }
+  
+  # Get the model type
+  model_type <- explainer$model$.classes[1]
+  
+  # Get the model and freeze all random components
+  model <- explainer$model
+  model$eval()
+  
+  # Get the whole dataset
+  dataset <- explainer$data[[1]]
+  
+  # Get the input data as an array
+  data <- dataset[, !(colnames(dataset) %in% c("time", "status")), ]
+  
+  # Get the outcome
+  y <- Surv(time = dataset$time, event = dataset$status)
+  
+  # Get target labels
+  target <- switch(model_type, DeepHit = "pmf", CoxTime = "hazard", DeepSurv = "hazard")
+  
+  # Get the predict function for the risk score
+  # Note: 'newdata' needs to be transformed to a torch tensor to be used for
+  # the torch model. After that, the output needs to be transformed back to an
+  # array.
+  predict_function <- function(model, newdata) {
+    input <- torch_tensor(as.matrix(newdata))
+    input <- model$preprocess_fun(input)
+    out <- model(input, target = target)[[1]]
+    out <- out$squeeze(dim = seq_len(out$dim())[-c(1, out$dim())])
+    as.array(out)
+  }
+  
+  # Get time points
+  if (model_type == "DeepHit") {
+    times <- explainer$model$time_bins
+  } else {
+    times <- explainer$model$t_orig
+  }
+  
+  # Get the predict survival function
+  # TODO: Doesn't work for SurvLime
+  predict_survival_function <- function(model, newdata, times) {
+    input <- torch_tensor(as.matrix(newdata))
+    input <- model$preprocess_fun(input)
+    out <- model(input, target = "survival")[[1]]
+    out <- out$squeeze(dim = seq_len(out$dim())[-c(1, out$dim())])
+    as.array(out)
+  }
+  
+  # Get the predict cumulative hazard function
+  # TODO: Doesn't work for SurvLime
+  target <- switch(model_type, DeepHit = "cif", CoxTime = "cum_hazard", DeepSurv = "cum_hazard")
+  predict_cumulative_hazard_function <- function(model, newdata, times) {
+    input <- torch_tensor(as.matrix(newdata))
+    input <- model$preprocess_fun(input)
+    out <- model(input, target = target)[[1]]
+    out <- out$squeeze(dim = seq_len(out$dim())[-c(1, out$dim())])
+    as.array(out)
+  }
+  
+  # Create survex explainer
+  survex::explain_survival(
+    model = model,
+    data = data,
+    verbose = verbose,
+    y = y,
+    predict_function = predict_function,
+    label = model_type,
+    times = times,
+    predict_survival_function = predict_survival_function,
+    predict_cumulative_hazard_function = predict_cumulative_hazard_function
+  )
+}
+
+# Plot functions ---------------------------------------------------------------
 plot_surv_pred <- function(x, model = "DeepSurv") {
   dat <- as.data.frame(x)
   dat$id <- as.factor(dat$id)

@@ -63,6 +63,9 @@ fit_model <- function(model, train, test) {
   callr::r(function(model, train, test) {
     library(survivalmodels)
     library(survival)
+    
+    source("utils_survivalmodels.R")
+
     reticulate::use_condaenv("Survinng", required = TRUE)
     set.seed(1)
     set_seed(1)
@@ -74,7 +77,7 @@ fit_model <- function(model, train, test) {
                      dropout = 0.1)
     } else if (model == "DeepHit") {
       model <- deephit(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 500L,
-                     early_stopping = TRUE, frac = 0.33, patience = 10L, cuts = 30, 
+                     early_stopping = TRUE, frac = 0.33, patience = 10L, cuts = 20L, 
                      batch_size = 1024L, dropout = 0.1)
     } else if (model == "DeepSurv") {
       model <- deepsurv(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 100L,

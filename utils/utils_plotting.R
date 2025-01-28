@@ -1,8 +1,128 @@
+################################################################################
+#                             Data preprocessing
+################################################################################
+
+# process gradshap results
+process_gradshap <- function(data, model = "DeepSurv") {
+  processed_data <- data %>%
+    group_by(id, feature) %>%
+    summarise(average_value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+    group_by(id) %>%
+    mutate(rank = rank(-abs(average_value))) %>%
+    ungroup()
+  
+  # Count frequencies of ranks for each feature
+  result_data <- processed_data %>%
+    group_by(feature, rank) %>%
+    summarise(frequency = n(), .groups = "drop") %>%
+    mutate(ranking = case_when(
+      rank == 1 ~ "1st",
+      rank == 2 ~ "2nd",
+      rank == 3 ~ "3rd",
+      rank == 4 ~ "4th",
+      rank == 5 ~ "5th",
+      TRUE ~ as.character(rank)
+    )) %>%
+    select(feature, ranking, frequency)
+  
+  # Convert ranking to factor
+  result_data$ranking <- factor(result_data$ranking, levels = c("5th", "4th", "3rd", "2nd", "1st"))
+  
+  # Insert model column
+  result_data$model <- model
+  
+  # Return result
+  return(result_data)
+}
+
+
+# process survshap results
+process_survshap <- function(data, model = "DeepSurv") {
+  # Get aggregates
+  aggregates <- data$aggregate
+  
+  # Function to calculate rankings for each element
+  calculate_rankings <- function(vec) {
+    abs_values <- abs(vec)                    
+    ranking <- rank(-abs_values, ties.method = "first") 
+    return(ranking)
+  }
+  
+  # Apply the function to each element in the list
+  rankings <- lapply(aggregates, calculate_rankings)
+  
+  # Convert each vector into a data frame and combine them
+  rankings_df <- bind_rows(lapply(rankings, function(r) {
+    data.frame(feature = names(r), ranking = r)
+  }))
+  
+  # Calculate frequency of each feature for each ranking
+  rankings_df <- rankings_df %>%
+    group_by(feature, ranking) %>%
+    summarise(frequency = n(), .groups = "drop") %>%
+    mutate(ranking = case_when(
+      ranking == 1 ~ "1st",
+      ranking == 2 ~ "2nd",
+      ranking == 3 ~ "3rd",
+      ranking == 4 ~ "4th",
+      ranking == 5 ~ "5th",
+      TRUE ~ as.character(ranking)
+    ))
+  
+  # Expand to include all combinations of features and rankings
+  result <- expand.grid(
+    feature = unique(rankings_df$feature),
+    ranking = unique(rankings_df$ranking)
+  ) %>%
+    left_join(rankings_df, by = c("feature", "ranking")) %>%
+    mutate(frequency = replace_na(frequency, 0))
+  
+  # Convert ranking to factor
+  result$ranking <- factor(result$ranking, levels = c("5th", "4th", "3rd", "2nd", "1st"))
+  
+  # Insert model column
+  result$model <- model
+  
+  
+  # Return result
+  return(result)
+}
+
+
+
+################################################################################
+#                          Plot functions
+################################################################################
+
+
+# plot global importance
+plot_gimp <- function(plot_data) {
+  ggplot(plot_data, aes(x = frequency, y = ranking, fill = feature)) +
+    geom_bar(stat = "identity", position = "stack") +
+    labs(
+      title = "",
+      x = "",
+      y = "Importance ranking"
+    ) +
+    facet_wrap(vars(model),
+               scales = "free_x",
+               labeller = as_labeller(function(a)
+                 paste0(a))) +
+    scale_fill_viridis_d() +
+    theme_minimal() +
+    theme(
+      axis.title.y = element_text(size = 12),
+      axis.title.x = element_text(size = 12),
+      plot.title = element_text(size = 14, face = "bold"),
+      legend.title = element_blank()
+    )
+}
+
 # Plot survival curves
 plot_surv_pred <- function(x, model = "DeepSurv") {
   dat <- as.data.frame(x)
   dat$id <- as.factor(dat$id)
-
+  
   p <- ggplot(dat, aes(x = .data$time)) + NULL +
     geom_line(aes(
       y = .data$pred,
@@ -30,7 +150,7 @@ plot_attribution <- function(x,
                              add_comp = FALSE) {
   dat <- as.data.frame(x)
   dat$id <- as.factor(dat$id)
-
+  
   # Normalize values if requested
   if (normalize) {
     dat$value <- ave(
@@ -41,7 +161,7 @@ plot_attribution <- function(x,
         x / sum(x)
     )
   }
-
+  
   # Normalize values using absolute values if requested
   if (normalize_abs) {
     dat$value <- ave(
@@ -52,11 +172,11 @@ plot_attribution <- function(x,
         abs(x) / sum(abs(x))
     )
   }
-
+  
   # Add comparison curves (reference, prediction, sum, difference)
   if (add_comp) {
     dat$pred_ref <- dat$pred - dat$pred_diff
-
+    
     dat_comp <- pivot_longer(
       dat[,c("id", "time", "feature", "pred", "pred_diff", "pred_ref")],
       cols = c("pred", "pred_diff", "pred_ref"),
@@ -78,7 +198,7 @@ plot_attribution <- function(x,
   } else {
     comp <- NULL
   }
-
+  
   p <- ggplot(dat, aes(x = .data$time)) + NULL +
     geom_line(aes(
       y = .data$value,
@@ -112,14 +232,23 @@ plot_attribution <- function(x,
   return(p)
 }
 
-# Plot absolute contribution of feaatures
-plot_contribution <- function(x, scale = 0.7) {
+# Plot absolute contribution of features
+plot_contribution <- function(x, scale = 0.7, aggregate = FALSE) {
   # Convert input to a data frame and calculate derived columns
   dat <- as.data.frame(x)
+  
+  # Aggregate values if requested
+  if (aggregate) {
+    dat <- dat %>%
+      group_by(time, feature) %>%
+      summarise(value = mean(abs(value)), pred = mean(pred), pred_diff = mean(pred_diff), method = unique(method), .groups = "drop")
+    dat$id <- "Aggregated"
+  }
+  
   dat$id <- as.factor(dat$id)
   dat$pred_ref <- dat$pred - dat$pred_diff
   integer_times <- seq(from = ceiling(min(dat$time)), to = floor(max(dat$time)), by = 2)
-
+  
   # Process data to compute ratios, cumulative ratios, and ymin
   dat <- dat %>%
     group_by(id, time) %>%
@@ -131,14 +260,14 @@ plot_contribution <- function(x, scale = 0.7) {
     arrange(id, time, feature) %>%
     group_by(id, time) %>%
     mutate(ymin = lead(cumulative_ratio, default = 0))
-
+  
   # Obtain average ratio over features and positions for the barchart
   avg_contribution <- dat %>%
     group_by(id, feature) %>%
     summarise(mean_ratio = round(mean(ratio),2), .groups = "drop") %>%
     group_by(id) %>%
     mutate(pos = rev(cumsum(rev(mean_ratio)))*scale)
-
+  
   # Generate the plot
   p <- ggplot(dat, aes(x = .data$time)) +
     # Line plot for cumulative_ratio
@@ -180,9 +309,13 @@ plot_contribution <- function(x, scale = 0.7) {
     # Facet for each instance ID
     facet_wrap(vars(.data$id),
                scales = "free_x",
-               labeller = as_labeller(function(a)
-                 paste0("Instance ID: ", a),
-               )) +
+               labeller = as_labeller(function(a) {
+                 if (aggregate) {
+                   "Global"
+                 } else {
+                   paste0("Instance ID: ", a)
+                 }
+               })) +
     # Minimal theme
     theme_minimal(base_size = 16) +
     theme(legend.position = "bottom") +
@@ -199,7 +332,7 @@ plot_contribution <- function(x, scale = 0.7) {
       fill = "Feature"
     ) +
     scale_fill_viridis_d(alpha = 0.4)
-
+  
   return(p)
 }
 
@@ -327,7 +460,7 @@ plot_force <- function(x,
                 (dat_small$feature == "x1") &
                 (dat_small$id == "428"), "pos"] <- -0.1
     dat_small[((round(dat_small$time, 1) == 0.8) |
-                (round(dat_small$time, 1) == 7)) &
+                 (round(dat_small$time, 1) == 7)) &
                 (dat_small$feature == "x2") &
                 (dat_small$id == "428"),"pos"] <- 0
     dat_small[((round(dat_small$time, 1) == 1.6) |
@@ -390,11 +523,11 @@ plot_force <- function(x,
   if (intgradmean_td_deepsurv){
     dat_small[((round(dat_small$time, 1) == 1.6) | 
                  (round(dat_small$time, 1) == 5.5)) &
-              (dat_small$feature == "x1") &
+                (dat_small$feature == "x1") &
                 (dat_small$id == "79"), "pos"] <- 0.07
     dat_small[((round(dat_small$time, 1) == 1.6) | 
                  (round(dat_small$time, 1) == 5.5)) &
-              (dat_small$feature == "x3") &
+                (dat_small$feature == "x3") &
                 (dat_small$id == "79"), "pos"] <- -0.06
     dat_small[(round(dat_small$time, 1) == 0.8) &
                 (dat_small$feature == "x2") &
@@ -637,225 +770,3 @@ plot_force <- function(x,
   
   return(p)
 }
-
-
-# Fit model function
-fit_model <- function(model, train, test) {
-  callr::r(function(model, train, test) {
-    library(survivalmodels)
-    library(survival)
-    reticulate::use_condaenv("Survinng", required = TRUE)
-    set.seed(1)
-    set_seed(1)
-    
-    # Fit model
-    if (model == "CoxTime") {
-      model <- coxtime(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 500L,
-                       early_stopping = TRUE, frac = 0.33, batch_size = 1024L, patience = 10L,
-                       dropout = 0.1)
-    } else if (model == "DeepHit") {
-      model <- deephit(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 500L,
-                       early_stopping = TRUE, frac = 0.33, patience = 10L, cuts = 30, 
-                       batch_size = 1024L, dropout = 0.1)
-    } else if (model == "DeepSurv") {
-      model <- deepsurv(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 100L,
-                        early_stopping = TRUE, frac = 0.33, patience = 10L, batch_size = 1024L,
-                        dropout = 0.1)
-    } else {
-      stop("Model not found")
-    }
-    
-    # Make predictions
-    pred <- predict(model, newdata = test, type = "survival")
-    dat <- data.frame(
-      pred = c(pred), 
-      time = rep(as.numeric(colnames(pred)), each = nrow(pred)),
-      id = rep(1:nrow(pred), ncol(pred))
-    )
-    list(Survinng::extract_model(model), pred = dat)
-  }, list(model, train, test))
-}
-
-
-# process gradshap results
-process_gradshap <- function(data, model = "DeepSurv") {
-  processed_data <- data %>%
-  group_by(id, feature) %>%
-  summarise(average_value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-  group_by(id) %>%
-  mutate(rank = rank(-abs(average_value))) %>%
-  ungroup()
-
-  # Count frequencies of ranks for each feature
-  result_data <- processed_data %>%
-    group_by(feature, rank) %>%
-    summarise(frequency = n(), .groups = "drop") %>%
-    mutate(ranking = case_when(
-      rank == 1 ~ "1st",
-      rank == 2 ~ "2nd",
-      rank == 3 ~ "3rd",
-      rank == 4 ~ "4th",
-      rank == 5 ~ "5th",
-      TRUE ~ as.character(rank)
-    )) %>%
-    select(feature, ranking, frequency)
-  
-  # Convert ranking to factor
-  result_data$ranking <- factor(result_data$ranking, levels = c("5th", "4th", "3rd", "2nd", "1st"))
-  
-  # Insert model column
-  result_data$model <- model
-  
-  # Return result
-  return(result_data)
-}
-
-# plot global importance
-plot_gimp <- function(plot_data) {
-  ggplot(plot_data, aes(x = frequency, y = ranking, fill = feature)) +
-    geom_bar(stat = "identity", position = "stack") +
-    labs(
-      title = "",
-      x = "",
-      y = "Importance ranking"
-    ) +
-    facet_wrap(vars(model),
-               scales = "free_x",
-               labeller = as_labeller(function(a)
-                 paste0(a))) +
-    scale_fill_viridis_d() +
-    theme_minimal() +
-    theme(
-      axis.title.y = element_text(size = 12),
-      axis.title.x = element_text(size = 12),
-      plot.title = element_text(size = 14, face = "bold"),
-      legend.title = element_blank()
-    )
-}
-
-# process survshap results
-process_survshap <- function(data, model = "DeepSurv") {
-  # Get aggregates
-  aggregates <- data$aggregate
-
-  # Function to calculate rankings for each element
-  calculate_rankings <- function(vec) {
-    abs_values <- abs(vec)                    
-    ranking <- rank(-abs_values, ties.method = "first") 
-    return(ranking)
-  }
-
-  # Apply the function to each element in the list
-  rankings <- lapply(aggregates, calculate_rankings)
-
-  # Convert each vector into a data frame and combine them
-  rankings_df <- bind_rows(lapply(rankings, function(r) {
-    data.frame(feature = names(r), ranking = r)
-  }))
-
-  # Calculate frequency of each feature for each ranking
-  rankings_df <- rankings_df %>%
-    group_by(feature, ranking) %>%
-    summarise(frequency = n(), .groups = "drop") %>%
-    mutate(ranking = case_when(
-      ranking == 1 ~ "1st",
-      ranking == 2 ~ "2nd",
-      ranking == 3 ~ "3rd",
-      ranking == 4 ~ "4th",
-      ranking == 5 ~ "5th",
-      TRUE ~ as.character(ranking)
-    ))
-
-  # Expand to include all combinations of features and rankings
-  result <- expand.grid(
-    feature = unique(rankings_df$feature),
-    ranking = unique(rankings_df$ranking)
-  ) %>%
-    left_join(rankings_df, by = c("feature", "ranking")) %>%
-    mutate(frequency = replace_na(frequency, 0))
-  
-  # Convert ranking to factor
-  result$ranking <- factor(result$ranking, levels = c("5th", "4th", "3rd", "2nd", "1st"))
-  
-  # Insert model column
-  result$model <- model
-  
-
-  # Return result
-  return(result)
-}
-
-
-# convert Survinng explainer to survex explainer
-to_survex <- function(explainer, verbose = FALSE) {
-  model_type <- explainer$model$.classes[1]
-  
-  # Get the model and freeze all random components
-  model <- explainer$model
-  model$eval()
-  
-  # Get the whole dataset
-  dataset <- explainer$data[[1]]
-  
-  # Get the input data as an array
-  data <- dataset[, !(colnames(dataset) %in% c("time", "status")), ]
-  
-  # Get the outcome
-  y <- Surv(time = dataset$time, event = dataset$status)
-  
-  # Get target labels
-  target <- switch(model_type, DeepHit = "pmf", CoxTime = "hazard", DeepSurv = "hazard")
-  
-  # Get the predict function for the risk score
-  # Note: 'newdata' needs to be transformed to a torch tensor to be used for
-  # the torch model. After that, the output needs to be transformed back to an
-  # array.
-  predict_function <- function(model, newdata) {
-    input <- torch_tensor(as.matrix(newdata))
-    input <- model$preprocess_fun(input)
-    out <- model(input, target = target)[[1]]
-    out <- out$squeeze(dim = seq_len(out$dim())[-c(1, out$dim())])
-    as.array(out)
-  }
-  
-  # Get time points
-  if (model_type == "DeepHit") {
-    times <- explainer$model$time_bins
-  } else {
-    times <- explainer$model$t_orig
-  }
-  
-  # Get the predict survival function
-  predict_survival_function <- function(model, newdata, times) {
-    input <- torch_tensor(as.matrix(newdata))
-    input <- model$preprocess_fun(input)
-    out <- model(input, target = "survival")[[1]]
-    out <- out$squeeze(dim = seq_len(out$dim())[-c(1, out$dim())])
-    as.array(out)
-  }
-  
-  # Get the predict cumulative hazard function
-  target <- switch(model_type, DeepHit = "cif", CoxTime = "cum_hazard", DeepSurv = "cum_hazard")
-  predict_cumulative_hazard_function <- function(model, newdata, times) {
-    input <- torch_tensor(as.matrix(newdata))
-    input <- model$preprocess_fun(input)
-    out <- model(input, target = target)[[1]]
-    out <- out$squeeze(dim = seq_len(out$dim())[-c(1, out$dim())])
-    as.array(out)
-  }
-  
-  # Create survex explainer
-  explain_survival(
-    model = model,
-    data = data,
-    verbose = verbose,
-    y = y,
-    predict_function = predict_function,
-    label = model_type,
-    times = times,
-    predict_survival_function = predict_survival_function,
-    predict_cumulative_hazard_function = predict_cumulative_hazard_function
-  )
-}
-
-

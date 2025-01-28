@@ -23,8 +23,6 @@ deephit <- function(formula = NULL, data = NULL, reverse = FALSE,
                       frac = frac, discretise = TRUE, model = "deephit", cuts = cuts,
                       cutpoints = cutpoints, scheme = match.arg(scheme), cut_min = cut_min)
   
-  print(data$labtrans$cuts)
-  
   pycox <- reticulate::import("pycox")
   torchtuples <- reticulate::import("torchtuples")
   

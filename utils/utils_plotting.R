@@ -147,7 +147,8 @@ plot_surv_pred <- function(x, model = "DeepSurv") {
 plot_attribution <- function(x,
                              normalize = FALSE,
                              normalize_abs = FALSE,
-                             add_comp = FALSE) {
+                             add_comp = FALSE,
+                             label = "") {
   dat <- as.data.frame(x)
   dat$id <- as.factor(dat$id)
   
@@ -222,7 +223,7 @@ plot_attribution <- function(x,
     theme(legend.position = "bottom") +
     labs(
       x = "Time",
-      y = paste0("Attribution: ", unique(dat$method)),
+      y = paste0("Attribution S(t|x): ", label),
       color = "Feature",
       linetype = NULL
     ) +
@@ -233,7 +234,7 @@ plot_attribution <- function(x,
 }
 
 # Plot absolute contribution of features
-plot_contribution <- function(x, scale = 0.7, aggregate = FALSE) {
+plot_contribution <- function(x, scale = 0.7, aggregate = FALSE, label = "") {
   # Convert input to a data frame and calculate derived columns
   dat <- as.data.frame(x)
   
@@ -327,7 +328,7 @@ plot_contribution <- function(x, scale = 0.7, aggregate = FALSE) {
     # Labels
     labs(
       x = "Time",
-      y = paste0("% Contribution: ", unique(dat$method)),
+      y = paste0("% Contribution: ", label),
       color = "Feature",
       fill = "Feature"
     ) +
@@ -351,7 +352,8 @@ plot_force <- function(x,
                        intgradmean_td_deepsurv = FALSE, 
                        gradshap_td_cox = FALSE,
                        gradshap_td_deephit = FALSE,
-                       gradshap_td_deepsurv = FALSE) {
+                       gradshap_td_deepsurv = FALSE,
+                       label = "") {
   # Convert input to a data frame and calculate derived columns
   dat <- as.data.frame(x)
   dat$id <- as.factor(dat$id)
@@ -696,7 +698,7 @@ plot_force <- function(x,
       theme(legend.position = "bottom") +
       labs(
         x = "Time",
-        y = paste0("Contribution: ", unique(dat$method)),
+        y = paste0("Contribution: ", label),
         color = "Feature",
         fill = "Feature"
       ) +
@@ -762,7 +764,7 @@ plot_force <- function(x,
       theme(legend.position = "bottom") +
       labs(
         x = "Time",
-        y = paste0("Contribution: ", unique(dat$method)),
+        y = paste0("Contribution: ", label),
         color = "Feature",
         fill = "Feature"
       )

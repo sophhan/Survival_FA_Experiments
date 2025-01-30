@@ -20,15 +20,15 @@ fit_model <- function(model, train, test, num_layers = 2, num_hidden = 32L, cuts
     if (model == "CoxTime") {
       model <- coxtime(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 500L,
                        early_stopping = TRUE, frac = 0.33, batch_size = 1024L, patience = 10L,
-                       dropout = 0.1)
+                       dropout = 0.1, num_workers = 1L)
     } else if (model == "DeepHit") {
       model <- deephit(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 500L,
                        early_stopping = TRUE, frac = 0.33, patience = 10L, cuts = cuts, 
-                       batch_size = 1024L, dropout = 0.1)
+                       batch_size = 1024L, dropout = 0.1, num_workers = 1L)
     } else if (model == "DeepSurv") {
       model <- deepsurv(Surv(time, status) ~ ., data = train, verbose = FALSE, epochs = 100L,
                         early_stopping = TRUE, frac = 0.33, patience = 10L, batch_size = 1024L,
-                        dropout = 0.1)
+                        dropout = 0.1, num_workers = 1L)
     } else {
       stop("Model not found")
     }
@@ -41,7 +41,7 @@ fit_model <- function(model, train, test, num_layers = 2, num_hidden = 32L, cuts
       id = rep(1:nrow(pred), ncol(pred))
     )
     list(Survinng::extract_model(model, num_basehazard = num_basehazard), pred = dat)
-  }, list(model, train, test, num_layers, num_hidden, cuts, num_basehazard), show = TRUE)
+  }, list(model, train, test, num_layers, num_hidden, cuts, num_basehazard), show = FALSE)
 }
 
 

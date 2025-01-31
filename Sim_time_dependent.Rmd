@@ -223,7 +223,7 @@ ggsave(fig("sim_td_km_plot.pdf"), plot = km_plot$plot, width = 7, height = 5)
 
 ### Survival Prediction
 
-```{r td gradient, fig.width=10, fig.height=15}
+```{r td surv pred, fig.width=10, fig.height=15}
 # Print instances of interest
 td_ids <- c(79, 428)
 print(test[td_ids, ])
@@ -264,7 +264,7 @@ grad_plot
 ggsave(fig("sim_td_grad_plot.pdf"), plot = grad_plot, width = 10, height = 14)
 ```
 
-```{r td gradient, fig.width=10, fig.height=15}
+```{r td gradient norm, fig.width=10, fig.height=15}
 # Plot attributions
 grad_plot_norm <- cowplot::plot_grid(
   plot_attribution(grad_cox, normalize = TRUE, label = "Grad(t)"),
@@ -300,7 +300,7 @@ smoothgrad_plot
 ggsave(fig("sim_td_smoothgrad_plot.pdf"), plot = smoothgrad_plot, width = 10, height = 14)
 ```
 
-```{r td smoothgrad, fig.width=10, fig.height=15}
+```{r td smoothgrad norm, fig.width=10, fig.height=15}
 # Plot attributions
 smoothgrad_plot_comp <- cowplot::plot_grid(
   plot_attribution(sg_cox, normalize = TRUE, label = "SG(t)"), 
@@ -333,7 +333,7 @@ gradin_plot
 ggsave(fig("sim_td_gradin_plot.pdf"), plot = gradin_plot, width = 10, height = 14)
 ```
 
-```{r td gradientxinput, fig.width=10, fig.height=15}
+```{r td gradientxinput norm, fig.width=10, fig.height=15}
 # Plot attributions
 gradin_plot_norm <- cowplot::plot_grid(
   plot_attribution(gradin_cox, normalize = TRUE, label = "GxI(t)"), 
@@ -369,7 +369,7 @@ smoothgradin_plot
 ggsave(fig("sim_td_smoothgradin_plot.pdf"), plot = smoothgradin_plot, width = 10, height = 14)
 ```
 
-```{r td smoothgradxinput, fig.width=10, fig.height=15}
+```{r td smoothgradxinput norm, fig.width=10, fig.height=15}
 # Plot attributions
 smoothgradin_plot_norm <- cowplot::plot_grid(
   plot_attribution(sgin_cox, normalize = TRUE, label = "SGxI(t)"), 
@@ -405,7 +405,7 @@ intgrad0_plot
 ggsave(fig("sim_td_intgrad0_plot.pdf"), plot = intgrad0_plot, width = 10, height = 14)
 ```
 
-```{r td intgrad0, fig.width=10, fig.height=15}
+```{r td intgrad0 comp, fig.width=10, fig.height=15}
 # Plot attributions
 intgrad0_plot_comp <- cowplot::plot_grid(
   plot_attribution(ig0_cox, add_comp = TRUE, label = "IntGrad(t)"), 
@@ -418,7 +418,7 @@ intgrad0_plot_comp
 ggsave(fig("sim_td_intgrad0_plot_comp.pdf"), plot = intgrad0_plot_comp, width = 10, height = 14)
 ```
 
-```{r td intgrad0, fig.width=10, fig.height=15}
+```{r td intgrad0 contr, fig.width=10, fig.height=15}
 # Plot contributions
 intgrad0_plot_contr <- cowplot::plot_grid(
   plot_contribution(ig0_cox, scale = 0.9, label = "IntGrad(t)"), 
@@ -432,7 +432,7 @@ ggsave(fig("sim_td_intgrad0_plot_contr.pdf"), plot = intgrad0_plot_contr, width 
 ```
 
 
-```{r td intgrad0, fig.width=10, fig.height=15}
+```{r td intgrad0 force, fig.width=10, fig.height=15}
 # Plot force
 intgrad0_plot_force <- cowplot::plot_grid(
   plot_force(ig0_cox, zero_feature = "x4", upper_distance = 0, lower_distance = 0, lower_distance_x1 = 0.05, intgrad0_td_cox = TRUE, label = "IntGrad(t)"), 
@@ -447,7 +447,7 @@ ggsave(fig("sim_td_intgrad0_plot_force.pdf"), plot = intgrad0_plot_force, width 
 
 ## Mean baseline
 
-```{r td intgradmean, fig.width=10, fig.height=15}
+```{r td intgradmean mean, fig.width=10, fig.height=15}
 # Compute IntegratedGradient with mean baseline
 x_ref <- NULL # default: feature-wise mean
 igm_cox <- surv_intgrad(exp_coxtime, instance = td_ids, n = 50, x_ref = x_ref, batch_size = 1e6)
@@ -468,7 +468,7 @@ ggsave(fig("sim_td_intgradmean_plot.pdf"), plot = intgradmean_plot, width = 10, 
 
 
 
-```{r td intgradmean, fig.width=10, fig.height=15}
+```{r td intgradmean comp mean, fig.width=10, fig.height=15}
 # Plot attributions
 intgradmean_plot_comp <- cowplot::plot_grid(
   plot_attribution(igm_cox, add_comp = TRUE, label = "IntGrad(t)"), 
@@ -482,7 +482,7 @@ ggsave(fig("sim_td_intgradmean_plot_comp.pdf"), plot = intgradmean_plot_comp, wi
 ```
 
 
-```{r td intgradmean, fig.width=10, fig.height=15}
+```{r td intgradmean contr mean, fig.width=10, fig.height=15}
 # Plot contributions
 intgradmean_plot_contr <- cowplot::plot_grid(
   plot_contribution(igm_cox, scale = 0.9, label = "IntGrad(t)"), 
@@ -496,7 +496,7 @@ ggsave(fig("sim_td_intgradmean_plot_contr.pdf"), plot = intgradmean_plot_contr, 
 ```
 
 
-```{r td intgradmean, fig.width=10, fig.height=15}
+```{r td intgradmean mean force, fig.width=10, fig.height=15}
 # Plot force
 intgradmean_plot_force <- cowplot::plot_grid(
   plot_force(igm_cox, zero_feature = "x4", upper_distance = 0, lower_distance = 0, intgradmean_td_cox = TRUE, label = "IntGrad(t)"), 
@@ -534,7 +534,7 @@ ggsave(fig("sim_td_gshap_plot.pdf"), plot = gshap_plot, width = 10, height = 14)
 
 
 
-```{r td gradshap, fig.width=10, fig.height=15}
+```{r td gradshap comp, fig.width=10, fig.height=15}
 # Plot attributions
 gshap_plot_comp <- cowplot::plot_grid(
   plot_attribution(gshap_cox, add_comp = TRUE, label = "GradSHAP(t)"), 
@@ -548,7 +548,7 @@ ggsave(fig("sim_td_gshap_plot_comp.pdf"), plot = gshap_plot_comp, width = 10, he
 ```
 
 
-```{r td gradshap, fig.width=10, fig.height=15}
+```{r td gradshap contr, fig.width=10, fig.height=15}
 # Plot contributions
 gshap_plot_contr <- cowplot::plot_grid(
   plot_contribution(gshap_cox, scale = 0.9, label = "GradSHAP(t)"), 
@@ -561,7 +561,7 @@ gshap_plot_contr
 ggsave(fig("sim_td_gshap_plot_contr.pdf"), plot = gshap_plot_contr, width = 10, height = 14)
 ```
 
-```{r td gradshap, fig.width=10, fig.height=15}
+```{r td gradshap force, fig.width=10, fig.height=15}
 # Plot force
 gshap_plot_force <- cowplot::plot_grid(
   plot_force(gshap_cox, upper_distance = 0, lower_distance = 0, zero_feature = "x4", gradshap_td_cox = TRUE, label = "GradSHAP(t)"), 
@@ -577,7 +577,7 @@ ggsave(fig("sim_td_gshap_plot_force.pdf"), plot = gshap_plot_force, width = 10, 
 
 # Main paper plots
 
-```{r td gradient, fig.width=10, fig.height=15}
+```{r td gradient main, fig.width=10, fig.height=15}
 # Plot attributions
 grad_deephit_plot <- plot_attribution(grad_deephit, label = "Grad(t)")
 grad_deephit_plot
@@ -587,7 +587,7 @@ ggsave(fig("main_grad_deephit_td.pdf"), plot = grad_deephit_plot, width = 8, hei
 ```
 
 
-```{r td gradshap, fig.width=10, fig.height=15}
+```{r td gradshap main, fig.width=10, fig.height=15}
 # Plot force
 gshap_coxtime_plot <- cowplot::plot_grid(
   plot_attribution(gshap_cox, add_comp = TRUE, label = "GradSHAP(t)"), 
